@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P2P File Transfer</title>
+  <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background:#f7f7f7; padding-top:10%; }
+    h1 { color:#333; }
+    input, button { margin:10px; font-size:16px; }
+    #link { margin-top:20px; word-break:break-all; }
+  </style>
+</head>
+<body>
+  <h1>P2P File Transfer</h1>
+  <input type="file" id="fileInput">
+  <button id="sendBtn">Send</button>
+  <p id="status"></p>
+  <div id="link"></div>
+
+  <script>
+    const client = new WebTorrent();
+
+    document.getElementById('sendBtn').onclick = () => {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) return alert('Choose a file first!');
+      document.getElementById('status').textContent = 'Creating torrent...';
+
+      client.seed(file, torrent => {
+        const magnet = torrent.magnetURI;
+        const link = `https://instant.io/#${torrent.infoHash}`;
+        document.getElementById('status').textContent = 'Ready to share!';
+        document.getElementById('link').innerHTML =
+          `<b>Magnet link:</b><br><textarea rows="3" cols="80">${magnet}</textarea><br>
+           <b>Open in browser:</b> <a href="${link}" target="_blank">${link}</a>`;
+      });
+    };
+  </script>
+</body>
+</html>
