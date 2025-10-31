@@ -1,123 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WeP2P Transfer</title>
-  <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-  <style>
-    body {
-      font-family: "Inter", sans-serif;
-      background: linear-gradient(145deg, #e0e0e0, #ffffff);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-    }
-    #box {
-      background: #fff;
-      padding: 40px;
-      border-radius: 20px;
-      box-shadow: 0 4px 30px rgba(0,0,0,0.1);
-      text-align: center;
-      width: 320px;
-    }
-    h1 {
-      font-weight: 600;
-      color: #333;
-      margin-bottom: 20px;
-    }
-    input[type="file"] {
-      display: none;
-    }
-    label {
-      background-color: #007aff;
-      color: white;
-      padding: 12px 24px;
-      border-radius: 8px;
-      cursor: pointer;
-      display: inline-block;
-      margin-bottom: 10px;
-      font-size: 16px;
-    }
-    button {
-      background-color: #34c759;
-      color: white;
-      padding: 12px 24px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 16px;
-    }
-    button:disabled {
-      background-color: #aaa;
-      cursor: not-allowed;
-    }
-    #link, #qr { margin-top: 20px; word-break: break-all; }
-  </style>
+<meta charset="UTF-8" />
+<title>P2P File Transfer</title>
+<script src="https://cdn.jsdelivr.net/npm/simple-peer@latest/simplepeer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<style>
+  body { font-family: sans-serif; text-align: center; background: #f5f5f5; }
+  #box { margin-top: 100px; background: white; padding: 40px; border-radius: 20px; width: 320px; display: inline-block; }
+  button { padding: 10px 20px; border: none; border-radius: 6px; background: #007aff; color: white; cursor: pointer; }
+  #qr canvas { margin-top: 20px; }
+</style>
 </head>
 <body>
   <div id="box">
-    <h1>Send a file</h1>
-    <input type="file" id="fileInput">
-    <label for="fileInput">Choose file</label><br>
-    <button id="sendBtn" disabled>Send</button>
+    <h1>WeP2P WebRTC</h1>
+    <input type="file" id="fileInput"><br><br>
+    <button id="createOffer">Send File</button>
+    <div id="qr"></div>
+    <textarea id="offerData" placeholder="Offer / Answer JSON"></textarea><br><br>
+    <button id="connectBtn">Connect</button>
     <div id="status"></div>
-    <canvas id="qr"></canvas>
-    <div id="link"></div>
   </div>
 
-  <script>
-    const client = new WebTorrent();
-    const fileInput = document.getElementById('fileInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const status = document.getElementById('status');
-    const qrCanvas = document.getElementById('qr');
-    const linkDiv = document.getElementById('link');
+<script>
+let peer, file;
 
-    let file;
-    fileInput.onchange = () => {
-      file = fileInput.files[0];
-      sendBtn.disabled = !file;
-    };
+const fileInput = document.getElementById("fileInput");
+const qrDiv = document.getElementById("qr");
+const status = document.getElementById("status");
 
-    sendBtn.onclick = () => {
-      if (!file) return alert('Choose a file first');
-      status.textContent = 'Preparing to send...';
-      client.seed(file, torrent => {
-        const shareURL = `${location.origin}${location.pathname}?torrent=${torrent.infoHash}`;
-        status.textContent = 'Share this link:';
-        linkDiv.innerHTML = `<a href="${shareURL}" target="_blank">${shareURL}</a>`;
-        QRCode.toCanvas(qrCanvas, shareURL, { width: 200 });
-      });
-    };
-
-    // Receiver logic
-    const urlParams = new URLSearchParams(window.location.search);
-    const hash = urlParams.get('torrent');
-    if (hash) {
-      document.getElementById('box').innerHTML = "<h1>Receiving file...</h1><p id='progress'></p>";
-      const progress = document.getElementById('progress');
-      client.add(`magnet:?xt=urn:btih:${hash}`, torrent => {
-        torrent.on('download', () => {
-          const pct = ((torrent.downloaded / torrent.length) * 100).toFixed(1);
-          progress.textContent = `Downloading: ${pct}%`;
-        });
-        torrent.on('done', () => {
-          torrent.files.forEach(f => f.getBlobURL((err, url) => {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = f.name;
-            a.textContent = 'Download ' + f.name;
-            document.body.appendChild(a);
-          }));
-          progress.textContent = 'Download complete!';
-        });
-      });
-    }
-  </script>
-</body>
-</html>
+fileInput.onchange = () => file = fileInput.files[0];
