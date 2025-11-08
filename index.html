@@ -1,33 +1,91 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8" />
-<title>P2P File Transfer</title>
-<script src="https://cdn.jsdelivr.net/npm/simple-peer@latest/simplepeer.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<meta charset="UTF-8">
+<title>Simple WebRTC P2P DataChannel</title>
 <style>
-  body { font-family: sans-serif; text-align: center; background: #f5f5f5; }
-  #box { margin-top: 100px; background: white; padding: 40px; border-radius: 20px; width: 320px; display: inline-block; }
-  button { padding: 10px 20px; border: none; border-radius: 6px; background: #007aff; color: white; cursor: pointer; }
-  #qr canvas { margin-top: 20px; }
+body { font-family: Arial, sans-serif; max-width: 700px; margin: 20px auto; }
+textarea { width: 100%; height: 100px; margin-top: 5px; }
+input, button { padding: 8px; margin-top: 5px; }
+#messages { border: 1px solid #ccc; padding: 10px; height: 150px; overflow-y: auto; margin-top: 10px; }
 </style>
 </head>
 <body>
-  <div id="box">
-    <h1>WeP2P WebRTC</h1>
-    <input type="file" id="fileInput"><br><br>
-    <button id="createOffer">Send File</button>
-    <div id="qr"></div>
-    <textarea id="offerData" placeholder="Offer / Answer JSON"></textarea><br><br>
-    <button id="connectBtn">Connect</button>
-    <div id="status"></div>
-  </div>
+
+<h2>WebRTC Peer to Peer Data Transfer</h2>
+
+<button id="createOffer">Create Offer</button>
+<button id="createAnswer">Create Answer</button>
+
+<h3>Offer / Answer Exchange</h3>
+<textarea id="localSDP" placeholder="Your Offer or Answer"></textarea>
+<button id="copyLocal">Copy Local SDP</button>
+
+<textarea id="remoteSDP" placeholder="Paste Remote SDP Here"></textarea>
+<button id="setRemote">Set Remote SDP</button>
+
+<h3>Send Message</h3>
+<input type="text" id="messageInput" placeholder="Type message..." />
+<button id="sendMessage">Send</button>
+
+<h3>Messages</h3>
+<div id="messages"></div>
 
 <script>
-let peer, file;
+let pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+let channel;
 
-const fileInput = document.getElementById("fileInput");
-const qrDiv = document.getElementById("qr");
-const status = document.getElementById("status");
+// When receiving a data channel
+pc.ondatachannel = e => {
+  channel = e.channel;
+  channel.onmessage = e => addMessage("Peer: " + e.data);
+};
 
-fileInput.onchange = () => file = fileInput.files[0];
+// Log ICE candidates automatically
+pc.onicecandidate = () => {
+  document.getElementById("localSDP").value = JSON.stringify(pc.localDescription);
+};
+
+function addMessage(text) {
+  const div = document.getElementById("messages");
+  div.innerHTML += text + "<br>";
+  div.scrollTop = div.scrollHeight;
+}
+
+document.getElementById("createOffer").onclick = async () => {
+  channel = pc.createDataChannel("messaging");
+  channel.onmessage = e => addMessage("Peer: " + e.data);
+
+  let offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+};
+
+document.getElementById("createAnswer").onclick = async () => {
+  let answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+};
+
+document.getElementById("setRemote").onclick = async () => {
+  let sdp = JSON.parse(document.getElementById("remoteSDP").value);
+  await pc.setRemoteDescription(sdp);
+};
+
+document.getElementById("copyLocal").onclick = () => {
+  navigator.clipboard.writeText(document.getElementById("localSDP").value);
+  alert("Copied!");
+};
+
+document.getElementById("sendMessage").onclick = () => {
+  if (channel && channel.readyState === "open") {
+    let msg = document.getElementById("messageInput").value;
+    channel.send(msg);
+    addMessage("You: " + msg);
+    document.getElementById("messageInput").value = "";
+  } else {
+    alert("Connection not ready yet.");
+  }
+};
+</script>
+</body>
+</html>
+
