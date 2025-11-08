@@ -2,90 +2,126 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Simple WebRTC P2P DataChannel</title>
+<title>P2P File Transfer via OTP</title>
 <style>
-body { font-family: Arial, sans-serif; max-width: 700px; margin: 20px auto; }
-textarea { width: 100%; height: 100px; margin-top: 5px; }
-input, button { padding: 8px; margin-top: 5px; }
-#messages { border: 1px solid #ccc; padding: 10px; height: 150px; overflow-y: auto; margin-top: 10px; }
+ body { font-family: Arial, sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; background:#f8f8f8; }
+ .card { background:white; padding:20px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); width:320px; text-align:center; }
+ button { margin-top:10px; padding:10px 14px; border:none; border-radius:8px; background:#007bff; color:white; cursor:pointer; font-size:14px; width:100%; }
+ input { width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; margin-top:8px; }
 </style>
 </head>
 <body>
+<div class="card">
+  <h2>WebRTC P2P File Transfer</h2>
 
-<h2>WebRTC Peer to Peer Data Transfer</h2>
+  <input type="file" id="fileInput">
+  <button id="genOtpBtn">Generate OTP</button>
+  <p>Your OTP: <span id="otpDisplay">----</span></p>
 
-<button id="createOffer">Create Offer</button>
-<button id="createAnswer">Create Answer</button>
+  <input type="text" id="otpInput" placeholder="Enter OTP to receive file">
+  <button id="connectBtn">Connect</button>
 
-<h3>Offer / Answer Exchange</h3>
-<textarea id="localSDP" placeholder="Your Offer or Answer"></textarea>
-<button id="copyLocal">Copy Local SDP</button>
+  <p id="status"></p>
+</div>
 
-<textarea id="remoteSDP" placeholder="Paste Remote SDP Here"></textarea>
-<button id="setRemote">Set Remote SDP</button>
-
-<h3>Send Message</h3>
-<input type="text" id="messageInput" placeholder="Type message..." />
-<button id="sendMessage">Send</button>
-
-<h3>Messages</h3>
-<div id="messages"></div>
-
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 <script>
-let pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-let channel;
-
-// When receiving a data channel
-pc.ondatachannel = e => {
-  channel = e.channel;
-  channel.onmessage = e => addMessage("Peer: " + e.data);
+// TODO: Replace with your Firebase config
+var firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "SENDER_ID",
+  appId: "APP_ID"
 };
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-// Log ICE candidates automatically
-pc.onicecandidate = () => {
-  document.getElementById("localSDP").value = JSON.stringify(pc.localDescription);
-};
+let pc;
+let dataChannel;
+let file;
 
-function addMessage(text) {
-  const div = document.getElementById("messages");
-  div.innerHTML += text + "<br>";
-  div.scrollTop = div.scrollHeight;
+async function createConnection(otp) {
+  pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+
+  pc.onicecandidate = e => {
+    if (e.candidate) db.ref('rooms/'+otp+'/ice').push(JSON.stringify(e.candidate));
+  };
+
+  pc.ondatachannel = e => {
+    dataChannel = e.channel;
+    dataChannel.onmessage = receiveFile;
+  };
 }
 
-document.getElementById("createOffer").onclick = async () => {
-  channel = pc.createDataChannel("messaging");
-  channel.onmessage = e => addMessage("Peer: " + e.data);
+function receiveFile(e) {
+  const blob = new Blob([e.data]);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'received_file';
+  document.body.appendChild(a);
+  a.click(); a.remove();
+  document.getElementById('status').innerText = 'File received!';
+}
 
-  let offer = await pc.createOffer();
+// Sender
+async function createOffer(otp) {
+  dataChannel = pc.createDataChannel('file');
+  const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-};
+  await db.ref('rooms/'+otp).set({ offer: JSON.stringify(offer) });
 
-document.getElementById("createAnswer").onclick = async () => {
-  let answer = await pc.createAnswer();
+  db.ref('rooms/'+otp+'/answer').on('value', async snap => {
+    if (snap.exists()) {
+      const answer = JSON.parse(snap.val());
+      await pc.setRemoteDescription(answer);
+    }
+  });
+
+  db.ref('rooms/'+otp+'/ice').on('child_added', snap => {
+    pc.addIceCandidate(new RTCIceCandidate(JSON.parse(snap.val())));
+  });
+}
+
+// Receiver
+async function joinWithOtp(otp) {
+  const room = await db.ref('rooms/'+otp).once('value');
+  if (!room.exists()) return alert('Invalid OTP');
+
+  await createConnection(otp);
+
+  const offer = JSON.parse(room.val().offer);
+  await pc.setRemoteDescription(offer);
+  const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
+  await db.ref('rooms/'+otp+'/answer').set(JSON.stringify(answer));
+
+  db.ref('rooms/'+otp+'/ice').on('child_added', snap => {
+    pc.addIceCandidate(new RTCIceCandidate(JSON.parse(snap.val())));
+  });
+}
+
+// UI
+function sendFile() {
+  if (!file) return alert('Select a file first');
+  dataChannel.send(file);
+  document.getElementById('status').innerText = 'File sent!';
+}
+
+document.getElementById('fileInput').onchange = e => file = e.target.files[0];
+
+document.getElementById('genOtpBtn').onclick = async () => {
+  const otp = Math.floor(1000 + Math.random()*9000).toString();
+  document.getElementById('otpDisplay').innerText = otp;
+  await createConnection(otp);
+  createOffer(otp);
+  dataChannel && (dataChannel.onopen = sendFile);
 };
 
-document.getElementById("setRemote").onclick = async () => {
-  let sdp = JSON.parse(document.getElementById("remoteSDP").value);
-  await pc.setRemoteDescription(sdp);
-};
-
-document.getElementById("copyLocal").onclick = () => {
-  navigator.clipboard.writeText(document.getElementById("localSDP").value);
-  alert("Copied!");
-};
-
-document.getElementById("sendMessage").onclick = () => {
-  if (channel && channel.readyState === "open") {
-    let msg = document.getElementById("messageInput").value;
-    channel.send(msg);
-    addMessage("You: " + msg);
-    document.getElementById("messageInput").value = "";
-  } else {
-    alert("Connection not ready yet.");
-  }
-};
+document.getElementById('connectBtn').onclick = () => joinWithOtp(document.getElementById('otpInput').value);
 </script>
 </body>
 </html>
-
