@@ -1,127 +1,45 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>P2P File Transfer via OTP</title>
-<style>
- body { font-family: Arial, sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; background:#f8f8f8; }
- .card { background:white; padding:20px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); width:320px; text-align:center; }
- button { margin-top:10px; padding:10px 14px; border:none; border-radius:8px; background:#007bff; color:white; cursor:pointer; font-size:14px; width:100%; }
- input { width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; margin-top:8px; }
-</style>
+  <title>My Cute Website</title>
+  <style>
+    body {
+      background-color: #ffe6f2; /* pastel pink */
+      font-family: "Comic Sans MS", Arial, sans-serif;
+      text-align: center;
+      margin-top: 50px;
+    }
+
+    h1 {
+      color: #ff66b3; /* pastel magenta */
+      font-size: 3em;
+    }
+
+    p {
+      color: #666;
+      font-size: 1.2em;
+    }
+
+    .cute-button {
+      background-color: #ff99cc;
+      border: none;
+      padding: 15px 25px;
+      border-radius: 25px;
+      font-size: 1.2em;
+      cursor: pointer;
+      color: white;
+      transition: 0.3s;
+    }
+
+    .cute-button:hover {
+      background-color: #ff66b3;
+    }
+  </style>
 </head>
 <body>
-<div class="card">
-  <h2>WebRTC P2P File Transfer</h2>
+  <h1>🌸 Hello! Welcome to My Cute Website 🌸</h1>
+  <p>I made this myself, step by step.</p>
 
-  <input type="file" id="fileInput">
-  <button id="genOtpBtn">Generate OTP</button>
-  <p>Your OTP: <span id="otpDisplay">----</span></p>
-
-  <input type="text" id="otpInput" placeholder="Enter OTP to receive file">
-  <button id="connectBtn">Connect</button>
-
-  <p id="status"></p>
-</div>
-
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-<script>
-// TODO: Replace with your Firebase config
-var firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-
-let pc;
-let dataChannel;
-let file;
-
-async function createConnection(otp) {
-  pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-
-  pc.onicecandidate = e => {
-    if (e.candidate) db.ref('rooms/'+otp+'/ice').push(JSON.stringify(e.candidate));
-  };
-
-  pc.ondatachannel = e => {
-    dataChannel = e.channel;
-    dataChannel.onmessage = receiveFile;
-  };
-}
-
-function receiveFile(e) {
-  const blob = new Blob([e.data]);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'received_file';
-  document.body.appendChild(a);
-  a.click(); a.remove();
-  document.getElementById('status').innerText = 'File received!';
-}
-
-// Sender
-async function createOffer(otp) {
-  dataChannel = pc.createDataChannel('file');
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await db.ref('rooms/'+otp).set({ offer: JSON.stringify(offer) });
-
-  db.ref('rooms/'+otp+'/answer').on('value', async snap => {
-    if (snap.exists()) {
-      const answer = JSON.parse(snap.val());
-      await pc.setRemoteDescription(answer);
-    }
-  });
-
-  db.ref('rooms/'+otp+'/ice').on('child_added', snap => {
-    pc.addIceCandidate(new RTCIceCandidate(JSON.parse(snap.val())));
-  });
-}
-
-// Receiver
-async function joinWithOtp(otp) {
-  const room = await db.ref('rooms/'+otp).once('value');
-  if (!room.exists()) return alert('Invalid OTP');
-
-  await createConnection(otp);
-
-  const offer = JSON.parse(room.val().offer);
-  await pc.setRemoteDescription(offer);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  await db.ref('rooms/'+otp+'/answer').set(JSON.stringify(answer));
-
-  db.ref('rooms/'+otp+'/ice').on('child_added', snap => {
-    pc.addIceCandidate(new RTCIceCandidate(JSON.parse(snap.val())));
-  });
-}
-
-// UI
-function sendFile() {
-  if (!file) return alert('Select a file first');
-  dataChannel.send(file);
-  document.getElementById('status').innerText = 'File sent!';
-}
-
-document.getElementById('fileInput').onchange = e => file = e.target.files[0];
-
-document.getElementById('genOtpBtn').onclick = async () => {
-  const otp = Math.floor(1000 + Math.random()*9000).toString();
-  document.getElementById('otpDisplay').innerText = otp;
-  await createConnection(otp);
-  createOffer(otp);
-  dataChannel && (dataChannel.onopen = sendFile);
-};
-
-document.getElementById('connectBtn').onclick = () => joinWithOtp(document.getElementById('otpInput').value);
-</script>
+  <button class="cute-button">Click me!</button>
 </body>
 </html>
