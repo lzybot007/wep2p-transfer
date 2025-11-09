@@ -46,7 +46,15 @@
     const music = document.getElementById("bg-music");
     function playmusic()
 	{
-    		music.play();
+			if music.play()
+			{	
+    			music.pause();
+			}
+			else
+			{
+				music.play();
+			}		
+				
 	}
 </script>
 
