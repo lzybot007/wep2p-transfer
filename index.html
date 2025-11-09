@@ -37,9 +37,24 @@
   </style>
 </head>
 <body>
+
+  <audio id="bg-music" loop>
+    <source src="happy-heart.mp3" type="audio/mpeg">
+  </audio>
+
+<script>
+    const music = document.getElementById("bg-music");
+    function playmusic()
+	{
+    		music.play();
+	}
+</script>
+
   <h1>🌸 Hello! Welcome to My Cute Website 🌸</h1>
   <p>I made this myself, step by step.</p>
 
-  <button class="cute-button">Click me!</button>
+  <button class="cute-button" onclick="playmusic()">Click ee!</button>
+  
+
 </body>
 </html>
